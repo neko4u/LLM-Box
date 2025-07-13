@@ -1,0 +1,17 @@
+LLM-Box-Client/
+├── main.py                 # 应用程序主入口
+├── requirements.txt           # 项目依赖信息
+|
+├── assets/                 # 存放图标 图片等静态资源
+│   └── icon.png
+|
+├── core/                  # 核心业务逻辑
+│   ├── __init__.py
+│   ├── deployment_handler.py   # 处理本地和远程部署的逻辑（线程）
+│   └── monitoring_handler.py   # 处理性能数据获取的逻辑（线程） -- 后续开发
+|
+└── ui/
+    ├── __init__.py 
+    ├── main_window.py          # 主窗口，包含选项卡
+    ├── deployment_widget.py     # 部署panel
+    └── monitoring_widget.py    # 查看信息panel  -- 后续开发
