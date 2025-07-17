@@ -8,9 +8,12 @@ from PyQt6.QtWidgets import (QMainWindow,
                             QLineEdit, 
                             QPushButton, 
                             QHBoxLayout, 
-                            QGridLayout)
+                            QGridLayout,
+                            QFileDialog,
+                            QMessageBox,)
 from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt,QThread
+import os
 from .select_model_dialog import SelectModelDialog
 
 # from .deployment_widget import DeploymentWidget
@@ -24,6 +27,10 @@ class MainWindow(QMainWindow):
         self.main_tabs = QTabWidget()
         self.setCentralWidget(self.main_tabs)
         self.setup_all_tabs()
+
+        self.save_path = ""
+        self.download_thread = None
+        self.worker = None
 
     def setup_all_tabs(self):
         deployment_main_page = self.create_deployment_tab()
@@ -67,31 +74,73 @@ class MainWindow(QMainWindow):
         self.button1 = QPushButton("选择大模型")
         self.button2 = QPushButton("部署")
         self.label1 = QLabel("未选择任何模型")
+        self.button3 = QPushButton("选择安装路径")
+
+        self.label2 = QLineEdit()
+        self.label2.setPlaceholderText("请选择模型下载与安装的路径")
+        self.label2.setReadOnly(True)
         
 
 
         #button1 选择大模型
-        self.button1.setFixedWidth(200)
-        self.button1.setFixedHeight(50)
+        self.button1.setFixedWidth(100)
+        self.button1.setFixedHeight(40)
         self.button1.clicked.connect(self.select_model)
         #button2 部署启动
         self.button2.setFixedWidth(200)
-        self.button2.setFixedHeight(50)
+        self.button2.setFixedHeight(40)
+        #button3 选择路径
+        self.button3.setFixedWidth(100)
+        self.button3.setFixedHeight(40)
+        self.button3.clicked.connect(self.select_save_path)
+        #样式
+        self.label2.setFixedHeight(40)
+
         #排版
-        layout.addWidget(self.button1,1,1)
-        layout.addWidget(self.button2,2,1)
-        layout.addWidget(self.label1,1,2)
+        layout.addWidget(self.button1,0,0)
+        layout.addWidget(self.label1,0,1)
+
+        layout.addWidget(self.button3,1,0)
+        layout.addWidget(self.label2,1,1,1,4)
+        ##如果有需要说明的文件,添加在row2
+
+        layout.addWidget(self.button2,3,2,2,1)
+        ##如果需要显示进度条,添加在row4
 
         return page
 
     def create_remote_deployment_tab(self):
         page = QWidget()
-        layout = QFormLayout(page)
+        layout = QGridLayout(page)
 
-        layout.addRow("服务器地址:", QLineEdit())
-        layout.addRow("SSH 用户名:", QLineEdit())
-        layout.addRow("SSH 密码:", QLineEdit())
-        layout.addRow(QPushButton("测试连接并部署"))
+        self.button1 = QPushButton("测试连接并部署")
+        self.line_serverIp = QLineEdit()
+        self.line_sshAccount = QLineEdit()
+        self.line_sshPwd = QLineEdit()
+        self.label1 = QLabel("服务器地址:")
+        self.label2 = QLabel("SSH 用户名:")
+        self.label3 = QLabel("SSH 密码:")
+
+        #样式
+        ##button
+
+        self.button1.setFixedWidth(140)
+        self.button1.setFixedHeight(60)
+        ##label
+        self.label1.setFixedWidth(80)
+        self.label1.setFixedHeight(30)
+        self.label2.setFixedWidth(80)
+        self.label2.setFixedHeight(30)
+        self.label3.setFixedWidth(80)
+        self.label3.setFixedHeight(30)
+
+        layout.addWidget(self.label1,0,0)
+        layout.addWidget(self.line_serverIp,0,1,1,4)
+        layout.addWidget(self.label2,1,0)
+        layout.addWidget(self.line_sshAccount,1,1,1,4)
+        layout.addWidget(self.label3,2,0)
+        layout.addWidget(self.line_sshPwd,2,1,1,4)
+        layout.addWidget(self.button1,3,2,2,1)
 
         return page
 
@@ -101,6 +150,13 @@ class MainWindow(QMainWindow):
             selected_model = dialog.get_selected_model()
             if selected_model:
                 self.label1.setText(selected_model)
+
+    def select_save_path(self):
+        default_path = self.save_path if self.save_path else os.path.expanduser("~")
+        path = QFileDialog.getExistingDirectory(self, "选择保存路径", default_path)
+        if path:
+            self.save_path = path
+            self.label2.setText(self.save_path)
     
 
     def closeEvent(self, event):
