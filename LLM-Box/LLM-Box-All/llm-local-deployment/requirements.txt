@@ -1,0 +1,16 @@
+Flask==2.0.1
+requests==2.25.1
+numpy==1.21.0
+pandas==1.3.0
+torch==1.9.0
+transformers==4.6.1
+pytest==6.2.4
+docker==5.0.0
+flask
+huggingface_hub
+torch
+transformers
+# 用于ONNX转换和优化
+optimum[onnxruntime]
+# 如果需要GPU支持
+# optimum[onnxruntime-gpu]
