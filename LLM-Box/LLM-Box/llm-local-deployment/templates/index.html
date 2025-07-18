@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 本地部署</title>
+    <style>
+        body { font-family: sans-serif; margin: 2em; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #444; }
+        input, textarea, select, button { width: 100%; padding: 10px; margin: 5px 0 15px 0; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; font-size: 1em; }
+        button:hover { background-color: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #result, #status { margin-top: 1em; padding: 1em; border: 1px solid #ddd; background: #eee; border-radius: 4px; white-space: pre-wrap; word-wrap: break-word; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>LLM 本地部署控制台</h1>
+
+    <!-- 模型管理 -->
+    <section id="model-management">
+        <h2>模型管理</h2>
+        <table id="models-table">
+            <thead>
+                <tr>
+                    <th>模型 ID</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- 模型列表将由JS动态填充 -->
+            </tbody>
+        </table>
+        <button onclick="fetchModels()">刷新列表</button>
+        
+        <h3>下载新模型</h3>
+        <form id="download-form">
+            <input type="text" id="model-id-download" placeholder="例如：gpt2" required>
+            <button type="submit">下载模型</button>
+        </form>
+    </section>
+
+    <hr>
+
+    <!-- 推理界面 -->
+    <section id="inference-ui">
+        <h2>文本生成</h2>
+        <form id="generate-form">
+            <label for="model-id-select">选择模型:</label>
+            <select id="model-id-select" required></select>
+
+            <label for="prompt">输入提示:</label>
+            <textarea id="prompt" rows="5" placeholder="例如：Hello, what is the weather today?" required></textarea>
+
+            <label for="max-length">最大长度:</label>
+            <input type="number" id="max-length" value="50">
+            
+            <label for="runtime-select">选择运行时:</label>
+            <select id="runtime-select">
+                <option value="pytorch">PyTorch</option>
+                <option value="onnx">ONNX</option>
+            </select>
+
+            <button type="submit">生成文本</button>
+            <button type="button" id="stream-button">流式生成 (仅PyTorch)</button>
+        </form>
+        <h3>生成结果:</h3>
+        <pre id="result">结果将显示在这里...</pre>
+    </section>
+    
+    <div id="status"></div>
+</div>
+
+<script>
+    const statusDiv = document.getElementById('status');
+
+    // 获取并显示模型列表
+    async function fetchModels() {
+        statusDiv.textContent = '正在刷新模型列表...';
+        try {
+            const response = await fetch('/api/models');
+            const models = await response.json();
+            
+            const tableBody = document.querySelector("#models-table tbody");
+            const modelSelect = document.getElementById('model-id-select');
+            tableBody.innerHTML = '';
+            modelSelect.innerHTML = '';
+
+            if (models.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="2">未找到本地模型。</td></tr>';
+            } else {
+                models.forEach(modelId => {
+                    // 填充表格
+                    const row = `<tr><td>${modelId}</td><td><button onclick="convertToONNX('${modelId}')">转ONNX</button></td></tr>`;
+                    tableBody.innerHTML += row;
+                    // 填充下拉菜单
+                    const option = `<option value="${modelId}">${modelId}</option>`;
+                    modelSelect.innerHTML += option;
+                });
+            }
+            statusDiv.textContent = '模型列表已更新。';
+        } catch (error) {
+            statusDiv.textContent = `错误: ${error}`;
+        }
+    }
+
+    // 下载模型
+    document.getElementById('download-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const modelId = document.getElementById('model-id-download').value;
+        statusDiv.textContent = `正在下载 ${modelId}...`;
+        try {
+            const response = await fetch('/api/models/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '下载失败');
+            statusDiv.textContent = data.message;
+            fetchModels(); // 刷新列表
+        } catch (error) {
+            statusDiv.textContent = `错误: ${error}`;
+        }
+    });
+
+    // 文本生成
+    document.getElementById('generate-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const resultDiv = document.getElementById('result');
+        resultDiv.textContent = '正在生成...';
+        
+        const payload = {
+            model_id: document.getElementById('model-id-select').value,
+            prompt: document.getElementById('prompt').value,
+            max_length: parseInt(document.getElementById('max-length').value),
+            runtime: document.getElementById('runtime-select').value
+        };
+
+        try {
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '生成失败');
+            resultDiv.textContent = data.generated_text;
+        } catch (error) {
+            resultDiv.textContent = `错误: ${error}`;
+        }
+    });
+
+    // 流式文本生成 (WebSocket)
+    document.getElementById('stream-button').addEventListener('click', () => {
+        const resultDiv = document.getElementById('result');
+        resultDiv.textContent = ''; // 清空之前的结果
+        
+        const payload = {
+            model_id: document.getElementById('model-id-select').value,
+            prompt: document.getElementById('prompt').value,
+            max_length: parseInt(document.getElementById('max-length').value)
+        };
+
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/api/generate-stream`);
+
+        ws.onopen = function() {
+            statusDiv.textContent = 'WebSocket 连接已建立。正在发送请求...';
+            ws.send(JSON.stringify(payload));
+        };
+
+        ws.onmessage = function(event) {
+            if (event.data === "[END_OF_STREAM]") {
+                statusDiv.textContent = '流式生成完成。';
+                ws.close();
+            } else {
+                resultDiv.textContent += event.data;
+            }
+        };
+
+        ws.onerror = function(error) {
+            statusDiv.textContent = `WebSocket 错误: ${error}`;
+            console.error('WebSocket Error:', error);
+        };
+
+        ws.onclose = function() {
+            statusDiv.textContent = 'WebSocket 连接已关闭。';
+        };
+    });
+    
+    // 转换为ONNX
+    async function convertToONNX(modelId) {
+        statusDiv.textContent = `正在将 ${modelId} 转换为 ONNX...`;
+        try {
+            const response = await fetch('/api/models/convert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId, format: 'onnx' })
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || '转换失败');
+            statusDiv.textContent = data.message;
+        } catch (error) {
+            statusDiv.textContent = `错误: ${error}`;
+        }
+    }
+
+    // 页面加载时自动获取模型列表
+    window.onload = fetchModels;
+</script>
+
+</body>
+</html>
